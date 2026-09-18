@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="theme-color" content="#1B2A6B" />
+<title>My Library</title>
+<link rel="apple-touch-icon" href="icon.png" />
+<link rel="manifest" href="manifest.json" />
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --paper:#F7F3EA; --paper-raised:#FFFFFF; --ink:#242018; --ink-soft:#6B6459;
+    --line:#DED6C4; --line-strong:#C9BEA5; --accent:#0F6E56; --accent-soft:#E1F5EE;
+    --accent-text:#085041; --danger:#A32D2D;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#1C1B17; --paper-raised:#26241E; --ink:#EDE8DC; --ink-soft:#A69E8C;
+      --line:#3A3730; --line-strong:#4A463C; --accent:#5DCAA5; --accent-soft:#0C2A22;
+      --accent-text:#9FE1CB; --danger:#F09595;
+    }
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--paper); color:var(--ink);
+    display:flex; flex-direction:column; height:100vh; overflow:hidden;
+  }
+  header{
+    display:flex; align-items:center; gap:8px;
+    padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;
+    border-bottom:1px solid var(--line); background:var(--paper-raised); flex-shrink:0;
+  }
+  #backBtn{ display:none; }
+  h1{
+    font-family:Georgia,'Times New Roman',serif; font-size:16px; font-weight:600;
+    margin:0; margin-right:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  button{
+    font-family:inherit; font-size:12.5px; background:var(--paper-raised); color:var(--ink);
+    border:1px solid var(--line-strong); border-radius:8px; padding:7px 11px; cursor:pointer; flex-shrink:0;
+  }
+  button:hover{ background:var(--accent-soft); }
+  #addBtn{ color:var(--accent-text); border-color:var(--accent); font-weight:600; }
+  #editToggleBtn.active{ background:var(--accent-soft); color:var(--accent-text); border-color:var(--accent); }
+
+  main{ flex:1; overflow-y:auto; padding:14px 14px calc(env(safe-area-inset-bottom,0px) + 14px); }
+
+  #emptyState{ text-align:center; color:var(--ink-soft); max-width:280px; margin:18vh auto 0; }
+  #emptyState h2{ font-family:Georgia,serif; color:var(--ink); font-size:19px; margin:0 0 8px; }
+  #emptyState p{ font-size:13px; line-height:1.6; margin:0; }
+
+  .item-row{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin-bottom:10px; display:flex; align-items:center; gap:8px; cursor:pointer;
+  }
+  .item-row .num{
+    font-family:Georgia,serif; font-size:13px; color:var(--accent-text); background:var(--accent-soft);
+    width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .item-row .info{ flex:1; min-width:0; }
+  .item-row .info h3{ font-size:14.5px; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item-row .info p{ font-size:12px; color:var(--ink-soft); margin:3px 0 0; }
+  .item-row .tools{ display:flex; gap:2px; flex-shrink:0; }
+  .icon-btn{
+    border:none; background:none; padding:5px 7px; font-size:13px; border-radius:6px;
+    color:var(--ink-soft); cursor:pointer; flex-shrink:0;
+  }
+  .icon-btn:hover{ background:var(--line); color:var(--ink); }
+  .icon-btn.danger:hover{ color:var(--danger); }
+
+  section{ margin-bottom:22px; }
+  section > h2{
+    font-family:Georgia,serif; font-size:14px; color:var(--ink-soft); margin:0 0 10px;
+    text-transform:uppercase; letter-spacing:0.5px; font-weight:600;
+  }
+
+  .file-row{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; margin-bottom:8px; display:flex; align-items:center; gap:10px;
+  }
+  .file-row .emoji{ font-size:18px; flex-shrink:0; }
+  .file-row .thumb{ width:36px; height:36px; border-radius:7px; object-fit:cover; flex-shrink:0; background:var(--line); }
+  .file-row .fname{ flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-row a.open-link, .file-row .open-btn{
+    text-decoration:none; flex:1; min-width:0; display:flex; align-items:center; gap:10px; color:var(--ink);
+    background:none; border:none; padding:0; font-size:13px; text-align:left; cursor:pointer;
+  }
+
+  .add-row{ margin-bottom:6px; display:flex; gap:8px; flex-wrap:wrap; }
+  .add-row button{ font-size:12.5px; }
+  .export-bar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+  .export-bar button{ font-size:12px; color:var(--accent-text); border-color:var(--accent); }
+
+  .note{
+    border-radius:10px; margin-bottom:8px; font-size:13px; line-height:1.5; color:#2B2718; overflow:hidden;
+  }
+  .note-head{
+    display:flex; align-items:center; gap:8px; padding:10px 34px 10px 12px; cursor:pointer; position:relative;
+  }
+  .note-head .chevron{ font-size:11px; transition:transform 0.15s ease; flex-shrink:0; }
+  .note.open .note-head .chevron{ transform:rotate(90deg); }
+  .note-head .preview{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .note.open .note-head .preview{ display:none; }
+  .note-body{ display:none; padding:0 34px 12px 12px; white-space:pre-wrap; word-break:break-word; }
+  .note.open .note-body{ display:block; }
+  .note-photo{ display:block; max-width:100%; border-radius:8px; margin-bottom:8px; cursor:pointer; }
+  .note .rm{
+    position:absolute; top:6px; right:6px; border:none; background:rgba(0,0,0,0.1);
+    width:20px; height:20px; border-radius:50%; font-size:11px; padding:0; line-height:1;
+  }
+  .swatches{ display:flex; gap:8px; margin-bottom:10px; }
+  .swatch{ width:26px; height:26px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
+  .swatch.selected{ border-color:var(--ink); }
+  .note-form{ display:none; background:var(--paper-raised); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:12px; }
+  .note-form.show{ display:block; }
+  .note-form textarea{
+    width:100%; font-family:inherit; font-size:13px; border:1px solid var(--line-strong); border-radius:8px;
+    padding:8px; resize:vertical; min-height:60px; margin-bottom:10px; background:var(--paper); color:var(--ink);
+  }
+
+  input[type="file"]{ display:none; }
+
+  /* fullscreen overlays */
+  .overlay{
+    display:none; position:fixed; inset:0; background:var(--paper); z-index:60;
+    flex-direction:column;
+  }
+  .overlay.show{ display:flex; }
+  .overlay-header{
+    display:flex; align-items:center; gap:8px;
+    padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;
+    border-bottom:1px solid var(--line); background:var(--paper-raised); flex-shrink:0;
+  }
+  .overlay-header h2{ font-family:Georgia,serif; font-size:15px; margin:0; margin-right:auto; }
+  .overlay-body{ flex:1; overflow:auto; padding:14px; }
+
+  /* photo viewer */
+  #photoViewer{ background:rgba(0,0,0,0.92); align-items:center; justify-content:center; }
+  #photoViewer img{ max-width:92%; max-height:85%; border-radius:8px; }
+  #photoViewerClose{ position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); right:14px; background:rgba(255,255,255,0.15); color:#fff; border:none; }
+
+  /* sheet editor */
+  #sheetTable{ border-collapse:collapse; width:100%; }
+  #sheetTable td{
+    border:1px solid var(--line-strong); padding:7px 9px; font-size:13px; min-width:70px;
+    background:var(--paper-raised); outline:none;
+  }
+  #sheetTable td:focus{ background:var(--accent-soft); }
+  #sheetTools{ display:flex; gap:8px; margin-top:12px; }
+
+  /* drawing */
+  #drawCanvas{ width:100%; height:100%; touch-action:none; background:var(--paper-raised); border-radius:10px; border:1px solid var(--line); }
+  #drawToolbar{ display:flex; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid var(--line); background:var(--paper-raised); flex-shrink:0; }
+  .pen-swatch{ width:24px; height:24px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
+  .pen-swatch.selected{ border-color:var(--ink); }
+</style>
+</head>
+<body>
+
+<header>
+  <button id="backBtn">←</button>
+  <h1 id="titleText">My library</h1>
+  <button id="editToggleBtn" style="display:none;">Edit</button>
+  <button id="addBtn">+ Add book</button>
+</header>
+
+<main id="main"></main>
+
+<div class="overlay" id="photoViewer">
+  <button id="photoViewerClose">Close</button>
+  <img id="photoViewerImg" src="" />
+</div>
+
+<div class="overlay" id="sheetOverlay">
+  <div class="overlay-header">
+    <button id="sheetBackBtn">← Done</button>
+    <h2 id="sheetName">Sheet</h2>
+  </div>
+  <div class="overlay-body">
+    <table id="sheetTable"></table>
+    <div id="sheetTools">
+      <button id="addRowBtn">+ Row</button>
+      <button id="addColBtn">+ Column</button>
+      <button id="downloadSheetBtn">⬇️ Download as CSV</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="scanOverlay">
+  <div class="overlay-header">
+    <button id="scanBackBtn">← Cancel</button>
+    <h2>Scanned text</h2>
+  </div>
+  <div class="overlay-body">
+    <p id="scanStatus" style="font-size:13px;color:var(--ink-soft);margin-top:0;"></p>
+    <textarea id="scanTextarea" style="width:100%;min-height:220px;font-family:inherit;font-size:14px;line-height:1.6;padding:10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--paper-raised);color:var(--ink);"></textarea>
+    <div class="add-row" style="margin-top:14px;">
+      <button id="saveWordBtn">Save as Word (.doc)</button>
+      <button id="savePdfBtn">Save as PDF</button>
+      <button id="saveExcelBtn">Save as Excel (.csv)</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="drawOverlay">
+  <div class="overlay-header">
+    <button id="drawBackBtn">← Cancel</button>
+    <h2>New drawing</h2>
+    <button id="drawSaveBtn">Save</button>
+  </div>
+  <div class="overlay-body" style="padding:10px;">
+    <canvas id="drawCanvas"></canvas>
+  </div>
+  <div id="drawToolbar"></div>
+</div>
+
+<script>
+/* ---------- storage ---------- */
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('libraryAppDBv2', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('books', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbGetAll(){
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('books', 'readonly');
+    const r = tx.objectStore('books').getAll();
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function dbPut(book){
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('books', 'readwrite');
+    tx.objectStore('books').put(book);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function dbDelete(id){
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('books', 'readwrite');
+    tx.objectStore('books').delete(id);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+const NOTE_COLORS = ['#FDE68A', '#F9A8D4', '#93C5FD', '#86EFAC'];
+const PEN_COLORS = ['#242018', '#DC2626', '#2563EB', '#16A34A', '#D97706'];
+
+function fileEmoji(type, name){
+  const n = (name || '').toLowerCase();
+  if (type.includes('pdf') || n.endsWith('.pdf')) return '📄';
+  if (type.includes('word') || n.endsWith('.doc') || n.endsWith('.docx')) return '📝';
+  if (type.includes('sheet') || type.includes('excel') || n.endsWith('.xlsx') || n.endsWith('.xls') || n.endsWith('.csv')) return '📊';
+  if (type.includes('presentation') || n.endsWith('.pptx') || n.endsWith('.ppt')) return '📽️';
+  if (type.startsWith('video')) return '🎥';
+  return '📁';
+}
+
+/* ---------- state ---------- */
+let view = 'library';
+let books = [];
+let currentBook = null, currentChapter = null, currentTopic = null;
+let editMode = false;
+let objectUrls = [];
+
+const backBtn = document.getElementById('backBtn');
+const titleText = document.getElementById('titleText');
+const addBtn = document.getElementById('addBtn');
+const editToggleBtn = document.getElementById('editToggleBtn');
+const main = document.getElementById('main');
+
+function revokeUrls(){ objectUrls.forEach(u => URL.revokeObjectURL(u)); objectUrls = []; }
+function makeUrl(blob){ const u = URL.createObjectURL(blob); objectUrls.push(u); return u; }
+
+/* ---------- routing ---------- */
+async function goLibrary(){ view='library'; currentBook=null; currentChapter=null; currentTopic=null; render(); }
+function goBook(book){ view='book'; currentBook=book; currentChapter=null; currentTopic=null; render(); }
+function goChapter(chapter){ view='chapter'; currentChapter=chapter; currentChapter.notes = currentChapter.notes || []; currentTopic=null; render(); }
+function goTopic(topic){ view='topic'; currentTopic=topic; currentTopic.notes = currentTopic.notes || []; render(); }
+
+backBtn.addEventListener('click', () => {
+  if (view === 'topic') goChapter(currentChapter);
+  else if (view === 'chapter') goBook(currentBook);
+  else if (view === 'book') goLibrary();
+});
+
+async function persist(){ await dbPut(currentBook); }
+
+/* ---------- print / export (books, chapters, topics, files) ---------- */
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 8000);
+}
+function blobToDataURL(blob){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+function safeName(s){ return (s || 'untitled').replace(/[^a-z0-9\-_ ]+/gi, '_'); }
+
+async function fileToPrintHtml(file){
+  if (file.kind === 'sheet'){
+    const rows = file.data.map(r => '<tr>' + r.map(c => '<td>' + escapeHtml(c || '') + '</td>').join('') + '</tr>').join('');
+    return '<h4>📊 ' + escapeHtml(file.name) + '</h4><table class="p-table">' + rows + '</table>';
+  }
+  if (file.type && file.type.startsWith('image')){
+    const durl = await blobToDataURL(file.blob);
+    return '<h4>' + escapeHtml(file.name) + '</h4><img class="p-img" src="' + durl + '" />';
+  }
+  return '<p class="p-file">' + fileEmoji(file.type, file.name) + ' ' + escapeHtml(file.name) + ' <em>(open separately to view/print — this file type can\'t be embedded here)</em></p>';
+}
+async function notesToPrintHtml(notes){
+  let out = '';
+  for (const n of (notes || [])){
+    out += '<div class="p-note" style="background:' + n.color + '">';
+    if (n.photo){
+      const durl = await blobToDataURL(n.photo.blob);
+      out += '<img class="p-img" src="' + durl + '" />';
+    }
+    out += '<p>' + escapeHtml(n.text) + '</p></div>';
+  }
+  return out;
+}
+async function topicToPrintHtml(topic){
+  let out = '<h3>' + topic.number + '. ' + escapeHtml(topic.title) + '</h3>';
+  for (const f of topic.files) out += await fileToPrintHtml(f);
+  out += await notesToPrintHtml(topic.notes);
+  return out;
+}
+async function chapterToPrintHtml(chapter){
+  let out = '<h2>Chapter ' + chapter.number + ': ' + escapeHtml(chapter.title) + '</h2>';
+  if (chapter.file) out += await fileToPrintHtml(chapter.file);
+  out += await notesToPrintHtml(chapter.notes);
+  const topics = chapter.topics.slice().sort((a,b) => a.number - b.number);
+  for (const t of topics) out += await topicToPrintHtml(t);
+  return out;
+}
+async function bookToPrintHtml(book){
+  let out = '<h1>' + escapeHtml(book.title) + '</h1>';
+  const chapters = book.chapters.slice().sort((a,b) => a.number - b.number);
+  for (const c of chapters) out += await chapterToPrintHtml(c);
+  return out;
+}
+function openPrintWindow(title, bodyHtml){
+  const w = window.open('', '_blank');
+  if (!w){ alert('Please allow pop-ups for this site to print.'); return; }
+  w.document.write(
+    '<html><head><title>' + escapeHtml(title) + '</title><meta charset="utf-8">' +
+    '<style>' +
+    'body{font-family:Georgia,serif;color:#242018;padding:24px;max-width:800px;margin:auto;}' +
+    'h1{font-size:26px;border-bottom:2px solid #0F6E56;padding-bottom:8px;}' +
+    'h2{font-size:20px;margin-top:32px;color:#0F6E56;}' +
+    'h3{font-size:16px;margin-top:22px;}' +
+    'h4{font-size:14px;margin:14px 0 4px;}' +
+    '.p-img{max-width:100%;border-radius:6px;margin:6px 0 14px;}' +
+    '.p-table{border-collapse:collapse;margin-bottom:14px;}' +
+    '.p-table td{border:1px solid #C9BEA5;padding:5px 8px;font-size:13px;}' +
+    '.p-note{padding:10px 12px;border-radius:8px;margin-bottom:10px;font-size:13px;}' +
+    '.p-file{font-size:13px;color:#6B6459;}' +
+    '</style></head><body>' + bodyHtml +
+    '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<' + '/script>' +
+    '</body></html>'
+  );
+  w.document.close();
+}
+
+async function collectFilesIntoZip(files, folder){
+  for (const f of files){
+    if (f.kind === 'sheet'){
+      const csv = f.data.map(r => r.map(c => '"' + String(c || '').replace(/"/g,'""') + '"').join(',')).join('\n');
+      folder.file(safeName(f.name.replace(/\.[^.]+$/, '')) + '.csv', csv);
+    } else {
+      folder.file(safeName(f.name), f.blob);
+    }
+  }
+}
+async function downloadTopicZip(topic){
+  const zip = new JSZip();
+  await collectFilesIntoZip(topic.files, zip);
+  const blob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(blob, safeName(topic.title) + '.zip');
+}
+async function downloadChapterZip(chapter){
+  const zip = new JSZip();
+  if (chapter.file) zip.file(safeName(chapter.file.name), chapter.file.blob);
+  const topics = chapter.topics.slice().sort((a,b) => a.number - b.number);
+  for (const t of topics){
+    const folder = zip.folder(safeName(t.title) || 'topic');
+    await collectFilesIntoZip(t.files, folder);
+  }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(blob, safeName(chapter.title) + '.zip');
+}
+async function downloadBookZip(book){
+  const zip = new JSZip();
+  const chapters = book.chapters.slice().sort((a,b) => a.number - b.number);
+  for (const c of chapters){
+    const cFolder = zip.folder(safeName(c.title) || 'chapter');
+    if (c.file) cFolder.file(safeName(c.file.name), c.file.blob);
+    const topics = c.topics.slice().sort((a,b) => a.number - b.number);
+    for (const t of topics){
+      const tFolder = cFolder.folder(safeName(t.title) || 'topic');
+      await collectFilesIntoZip(t.files, tFolder);
+    }
+  }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(blob, safeName(book.title) + '.zip');
+}
+
+function makeExportBar(onPrint, onZip){
+  const bar = document.createElement('div');
+  bar.className = 'export-bar';
+  const printBtn = document.createElement('button');
+  printBtn.textContent = '🖨️ Print / Save as PDF';
+  printBtn.addEventListener('click', async () => {
+    printBtn.disabled = true; printBtn.textContent = 'Preparing…';
+    await onPrint();
+    printBtn.disabled = false; printBtn.textContent = '🖨️ Print / Save as PDF';
+  });
+  const zipBtn = document.createElement('button');
+  zipBtn.textContent = '⬇️ Download all files (.zip)';
+  zipBtn.addEventListener('click', async () => {
+    zipBtn.disabled = true; zipBtn.textContent = 'Zipping…';
+    await onZip();
+    zipBtn.disabled = false; zipBtn.textContent = '⬇️ Download all files (.zip)';
+  });
+  bar.appendChild(printBtn); bar.appendChild(zipBtn);
+  return bar;
+}
+
+/* ---------- render dispatcher ---------- */
+async function render(){
+  revokeUrls();
+  editToggleBtn.classList.toggle('active', editMode);
+  backBtn.style.display = view === 'library' ? 'none' : 'inline-block';
+  addBtn.style.display = view === 'library' ? 'inline-block' : 'none';
+  editToggleBtn.style.display = view === 'library' ? 'none' : 'inline-block';
+
+  if (view === 'library'){ titleText.textContent = 'My library'; editMode=false; await renderLibrary(); }
+  else if (view === 'book'){ titleText.textContent = currentBook.title; renderBook(); }
+  else if (view === 'chapter'){ titleText.textContent = currentChapter.title; renderChapter(); }
+  else if (view === 'topic'){ titleText.textContent = currentTopic.title; renderTopic(); }
+}
+editToggleBtn.addEventListener('click', () => { editMode = !editMode; render(); });
+
+/* ---------- library ---------- */
+async function renderLibrary(){
+  books = await dbGetAll();
+  main.innerHTML = '';
+  if (books.length === 0){
+    main.innerHTML = '<div id="emptyState"><h2>Your library is empty</h2><p>Add a book, then fill it with chapters, topics, and files.</p></div>';
+    return;
+  }
+  books.sort((a,b) => a.number - b.number).forEach(book => {
+    main.appendChild(makeItemRow({
+      number: book.number, title: book.title,
+      subtitle: book.chapters.length + (book.chapters.length === 1 ? ' chapter' : ' chapters'),
+      onOpen: () => goBook(book),
+      onRename: async (t) => { book.title = t; await dbPut(book); renderLibrary(); },
+      onDelete: async () => { await dbDelete(book.id); renderLibrary(); },
+      editable: true
+    }));
+  });
+}
+addBtn.addEventListener('click', async () => {
+  const t = prompt('Book title');
+  if (!t || !t.trim()) return;
+  const number = books.length ? Math.max(...books.map(b => b.number)) + 1 : 1;
+  const book = { id: uid(), number, title: t.trim(), addedAt: Date.now(), chapters: [] };
+  await dbPut(book);
+  renderLibrary();
+});
+
+/* ---------- book (chapters) ---------- */
+function renderBook(){
+  main.innerHTML = '';
+  main.appendChild(makeExportBar(
+    async () => openPrintWindow(currentBook.title, await bookToPrintHtml(currentBook)),
+    async () => downloadBookZip(currentBook)
+  ));
+  const chapters = currentBook.chapters.slice().sort((a,b) => a.number - b.number);
+  if (chapters.length === 0){
+    const empty = document.createElement('div');
+    empty.id = 'emptyState';
+    empty.innerHTML = '<h2>No chapters yet</h2><p>Add a chapter to start organizing this book.</p>';
+    main.appendChild(empty);
+  }
+  chapters.forEach(ch => {
+    ch.notes = ch.notes || [];
+    main.appendChild(makeItemRow({
+      number: ch.number, title: ch.title,
+      subtitle: (ch.topics.length + (ch.topics.length === 1 ? ' topic' : ' topics')) + (ch.file ? ' · has file' : '') + (ch.notes.length ? ' · ' + ch.notes.length + ' note' + (ch.notes.length===1?'':'s') : ''),
+      onOpen: () => goChapter(ch),
+      onRename: async (t) => { ch.title = t; await persist(); renderBook(); },
+      onDelete: async () => {
+        if (!confirm('Delete this chapter and everything inside it?')) return;
+        currentBook.chapters = currentBook.chapters.filter(c => c.id !== ch.id);
+        await persist(); renderBook();
+      },
+      editable: editMode
+    }));
+  });
+  if (editMode){
+    const row = document.createElement('div');
+    row.className = 'add-row';
+    const btn = document.createElement('button');
+    btn.textContent = '+ Add chapter';
+    btn.addEventListener('click', async () => {
+      const t = prompt('Chapter title');
+      if (!t || !t.trim()) return;
+      const number = currentBook.chapters.length ? Math.max(...currentBook.chapters.map(c => c.number)) + 1 : 1;
+      currentBook.chapters.push({ id: uid(), number, title: t.trim(), file: null, topics: [], notes: [] });
+      await persist(); renderBook();
+    });
+    row.appendChild(btn);
+    main.appendChild(row);
+  }
+}
+
+/* ---------- chapter (file + topics + notes) ---------- */
+function renderChapter(){
+  main.innerHTML = '';
+  main.appendChild(makeExportBar(
+    async () => openPrintWindow(currentChapter.title, await chapterToPrintHtml(currentChapter)),
+    async () => downloadChapterZip(currentChapter)
+  ));
+
+  const fileSection = document.createElement('section');
+  fileSection.innerHTML = '<h2>Chapter file</h2>';
+  if (currentChapter.file){
+    fileSection.appendChild(makeFileRow(currentChapter.file, true, async () => {
+      currentChapter.file = null; await persist(); renderChapter();
+    }));
+  } else {
+    const addRow = document.createElement('div');
+    addRow.className = 'add-row';
+    const btn = document.createElement('button');
+    btn.textContent = '+ Upload chapter file';
+    const input = document.createElement('input');
+    input.type = 'file';
+    btn.addEventListener('click', () => input.click());
+    input.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      currentChapter.file = { id: uid(), name: f.name, type: f.type, blob: f };
+      await persist(); renderChapter();
+    });
+    addRow.appendChild(btn); addRow.appendChild(input);
+    fileSection.appendChild(addRow);
+  }
+  main.appendChild(fileSection);
+
+  const topicSection = document.createElement('section');
+  topicSection.innerHTML = '<h2>Topics</h2>';
+  const topics = currentChapter.topics.slice().sort((a,b) => a.number - b.number);
+  if (topics.length === 0 && !editMode){
+    const p = document.createElement('p');
+    p.style.cssText = 'font-size:13px;color:var(--ink-soft);';
+    p.textContent = 'No topics yet.';
+    topicSection.appendChild(p);
+  }
+  topics.forEach(tp => {
+    tp.notes = tp.notes || [];
+    topicSection.appendChild(makeItemRow({
+      number: tp.number, title: tp.title,
+      subtitle: tp.files.length + (tp.files.length === 1 ? ' file' : ' files') + (tp.notes.length ? ' · ' + tp.notes.length + ' note' + (tp.notes.length===1?'':'s') : ''),
+      onOpen: () => goTopic(tp),
+      onRename: async (t) => { tp.title = t; await persist(); renderChapter(); },
+      onDelete: async () => {
+        if (!confirm('Delete this topic and its files/notes?')) return;
+        currentChapter.topics = currentChapter.topics.filter(x => x.id !== tp.id);
+        await persist(); renderChapter();
+      },
+      editable: editMode
+    }));
+  });
+  if (editMode){
+    const row = document.createElement('div');
+    row.className = 'add-row';
+    const btn = document.createElement('button');
+    btn.textContent = '+ Add topic';
+    btn.addEventListener('click', async () => {
+      const t = prompt('Topic title');
+      if (!t || !t.trim()) return;
+      const number = currentChapter.topics.length ? Math.max(...currentChapter.topics.map(x => x.number)) + 1 : 1;
+      currentChapter.topics.push({ id: uid(), number, title: t.trim(), files: [], notes: [] });
+      await persist(); renderChapter();
+    });
+    row.appendChild(btn);
+    topicSection.appendChild(row);
+  }
+  main.appendChild(topicSection);
+
+  const noteSection = document.createElement('section');
+  noteSection.innerHTML = '<h2>Sticky notes for this chapter</h2>';
+  renderNotesInto(noteSection, currentChapter.notes, persist, () => renderChapter());
+  main.appendChild(noteSection);
+}
+
+/* ---------- topic (files + notes) ---------- */
+function renderTopic(){
+  main.innerHTML = '';
+  main.appendChild(makeExportBar(
+    async () => openPrintWindow(currentTopic.title, await topicToPrintHtml(currentTopic)),
+    async () => downloadTopicZip(currentTopic)
+  ));
+
+  const fileSection = document.createElement('section');
+  fileSection.innerHTML = '<h2>Files</h2>';
+  if (currentTopic.files.length === 0){
+    const p = document.createElement('p');
+    p.style.cssText = 'font-size:13px;color:var(--ink-soft);';
+    p.textContent = 'No files yet.';
+    fileSection.appendChild(p);
+  }
+  currentTopic.files.forEach(f => {
+    fileSection.appendChild(makeFileRow(f, true, async () => {
+      currentTopic.files = currentTopic.files.filter(x => x.id !== f.id);
+      await persist(); renderTopic();
+    }, true));
+  });
+  const addRow = document.createElement('div');
+  addRow.className = 'add-row';
+
+  function makeUploadButton(label, accept){
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    if (accept) input.accept = accept;
+    btn.addEventListener('click', () => input.click());
+    input.addEventListener('change', async (e) => {
+      Array.from(e.target.files).forEach(f => {
+        currentTopic.files.push({ id: uid(), name: f.name, type: f.type, blob: f });
+      });
+      await persist(); renderTopic();
+      input.value = '';
+    });
+    addRow.appendChild(btn); addRow.appendChild(input);
+  }
+
+  makeUploadButton('+ Upload photo', 'image/*');
+  makeUploadButton('+ Upload Excel', '.xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv');
+  makeUploadButton('+ Upload Word', '.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  makeUploadButton('+ Upload PowerPoint', '.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation');
+  makeUploadButton('+ Upload other file', '');
+
+  const sheetBtn = document.createElement('button');
+  sheetBtn.textContent = '+ Blank Excel sheet';
+  sheetBtn.addEventListener('click', async () => {
+    const name = prompt('Sheet name', 'New sheet');
+    if (!name || !name.trim()) return;
+    const sheet = { id: uid(), kind: 'sheet', name: name.trim(),
+      data: Array.from({length:8}, () => Array.from({length:5}, () => '')) };
+    currentTopic.files.push(sheet);
+    await persist(); renderTopic();
+    openSheet(sheet);
+  });
+
+  const drawBtn = document.createElement('button');
+  drawBtn.textContent = '+ Drawing';
+  drawBtn.addEventListener('click', () => openDraw());
+
+  addRow.appendChild(sheetBtn); addRow.appendChild(drawBtn);
+  fileSection.appendChild(addRow);
+  main.appendChild(fileSection);
+
+  const noteSection = document.createElement('section');
+  noteSection.innerHTML = '<h2>Sticky notes for this topic</h2>';
+  renderNotesInto(noteSection, currentTopic.notes, persist, () => renderTopic());
+  main.appendChild(noteSection);
+}
+
+/* ---------- shared: sticky notes ---------- */
+function renderNotesInto(container, notesArr, persistFn, rerender){
+  notesArr.forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'note';
+    div.style.background = n.color;
+
+    const head = document.createElement('div');
+    head.className = 'note-head';
+    const chevron = document.createElement('span');
+    chevron.className = 'chevron';
+    chevron.textContent = '▸';
+    const preview = document.createElement('span');
+    preview.className = 'preview';
+    preview.textContent = n.text;
+    head.appendChild(chevron); head.appendChild(preview);
+    head.addEventListener('click', () => div.classList.toggle('open'));
+
+    const body = document.createElement('div');
+    body.className = 'note-body';
+    if (n.photo){
+      const img = document.createElement('img');
+      img.className = 'note-photo';
+      img.src = makeUrl(n.photo.blob);
+      img.addEventListener('click', () => openPhoto(makeUrl(n.photo.blob)));
+      body.appendChild(img);
+    }
+    const textDiv = document.createElement('div');
+    textDiv.textContent = n.text;
+    body.appendChild(textDiv);
+
+    const rm = document.createElement('button');
+    rm.className = 'rm';
+    rm.textContent = '✕';
+    rm.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const idx = notesArr.indexOf(n);
+      notesArr.splice(idx, 1);
+      await persistFn(); rerender();
+    });
+
+    div.appendChild(head);
+    div.appendChild(body);
+    div.appendChild(rm);
+    container.appendChild(div);
+  });
+
+  const addNoteRow = document.createElement('div');
+  addNoteRow.className = 'add-row';
+  const addNoteBtn = document.createElement('button');
+  addNoteBtn.textContent = '+ Add sticky note';
+  const form = document.createElement('div');
+  form.className = 'note-form';
+  let selectedColor = NOTE_COLORS[0];
+  const swatches = document.createElement('div');
+  swatches.className = 'swatches';
+  NOTE_COLORS.forEach((c, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (i === 0 ? ' selected' : '');
+    sw.style.background = c;
+    sw.addEventListener('click', () => {
+      selectedColor = c;
+      swatches.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+      sw.classList.add('selected');
+    });
+    swatches.appendChild(sw);
+  });
+  form.appendChild(swatches);
+  const textarea = document.createElement('textarea');
+  textarea.placeholder = 'Note text…';
+  form.appendChild(textarea);
+
+  let pendingPhoto = null;
+  const photoPreviewWrap = document.createElement('div');
+  photoPreviewWrap.style.cssText = 'margin-bottom:10px;';
+  form.appendChild(photoPreviewWrap);
+  function renderPhotoPreview(){
+    photoPreviewWrap.innerHTML = '';
+    if (!pendingPhoto) return;
+    const img = document.createElement('img');
+    img.className = 'note-photo';
+    img.src = makeUrl(pendingPhoto);
+    const rmPhoto = document.createElement('button');
+    rmPhoto.textContent = 'Remove photo';
+    rmPhoto.style.marginLeft = '8px';
+    rmPhoto.addEventListener('click', () => { pendingPhoto = null; renderPhotoPreview(); });
+    photoPreviewWrap.appendChild(img);
+    photoPreviewWrap.appendChild(rmPhoto);
+  }
+
+  const statusEl = document.createElement('p');
+  statusEl.style.cssText = 'font-size:12px;color:var(--ink-soft);margin:0 0 8px;display:none;';
+  form.appendChild(statusEl);
+
+  const mediaRow = document.createElement('div');
+  mediaRow.className = 'add-row';
+
+  const attachBtn = document.createElement('button');
+  attachBtn.textContent = '+ Attach photo';
+  const attachInput = document.createElement('input');
+  attachInput.type = 'file'; attachInput.accept = 'image/*';
+  attachBtn.addEventListener('click', () => attachInput.click());
+  attachInput.addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    pendingPhoto = f;
+    renderPhotoPreview();
+    attachInput.value = '';
+  });
+
+  const scanBtn = document.createElement('button');
+  scanBtn.textContent = '🔎 Scan text from photo';
+  const scanInput = document.createElement('input');
+  scanInput.type = 'file'; scanInput.accept = 'image/*';
+  scanBtn.addEventListener('click', () => scanInput.click());
+  scanInput.addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    statusEl.style.display = 'block';
+    statusEl.textContent = 'Reading the photo… this can take a moment.';
+    scanBtn.disabled = true;
+    try{
+      const { data } = await Tesseract.recognize(f, 'eng');
+      const cleaned = (data.text || '').trim();
+      textarea.value = textarea.value.trim() ? (textarea.value.trim() + '\n' + cleaned) : cleaned;
+      pendingPhoto = f;
+      renderPhotoPreview();
+      statusEl.textContent = 'Done — check the text below and fix anything it got wrong.';
+    } catch(err){
+      statusEl.textContent = "Couldn't read that photo clearly. Try a straighter, well-lit shot, or just type it.";
+    }
+    scanBtn.disabled = false;
+    scanInput.value = '';
+  });
+
+  mediaRow.appendChild(attachBtn); mediaRow.appendChild(attachInput);
+  mediaRow.appendChild(scanBtn); mediaRow.appendChild(scanInput);
+  form.appendChild(mediaRow);
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Save note';
+  saveBtn.addEventListener('click', async () => {
+    if (!textarea.value.trim() && !pendingPhoto) return;
+    notesArr.push({
+      id: uid(), color: selectedColor, text: textarea.value.trim(),
+      photo: pendingPhoto ? { blob: pendingPhoto } : null
+    });
+    pendingPhoto = null;
+    textarea.value = '';
+    statusEl.style.display = 'none';
+    await persistFn(); rerender();
+  });
+  form.appendChild(saveBtn);
+
+  addNoteBtn.addEventListener('click', () => form.classList.toggle('show'));
+  addNoteRow.appendChild(addNoteBtn);
+  container.appendChild(addNoteRow);
+  container.appendChild(form);
+}
+
+/* ---------- shared: item rows / file rows ---------- */
+function makeItemRow({ number, title, subtitle, onOpen, onRename, onDelete, editable }){
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  row.innerHTML = '<div class="num"></div><div class="info"><h3></h3><p></p></div><div class="tools"></div>';
+  row.querySelector('.num').textContent = number;
+  row.querySelector('h3').textContent = title;
+  row.querySelector('p').textContent = subtitle;
+  row.addEventListener('click', (e) => { if (!e.target.closest('.icon-btn')) onOpen(); });
+  if (editable){
+    const tools = row.querySelector('.tools');
+    const editIcon = document.createElement('button');
+    editIcon.className = 'icon-btn'; editIcon.textContent = '✎';
+    editIcon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const t = prompt('Rename', title);
+      if (t && t.trim()) onRename(t.trim());
+    });
+    const delIcon = document.createElement('button');
+    delIcon.className = 'icon-btn danger'; delIcon.textContent = '✕';
+    delIcon.addEventListener('click', (e) => { e.stopPropagation(); onDelete(); });
+    tools.appendChild(editIcon); tools.appendChild(delIcon);
+  }
+  return row;
+}
+
+function makeFileRow(file, removable, onRemove, allowScan){
+  const row = document.createElement('div');
+  row.className = 'file-row';
+
+  if (file.kind === 'sheet'){
+    const btn = document.createElement('button');
+    btn.className = 'open-btn';
+    btn.innerHTML = '<span class="emoji">📊</span><span class="fname"></span>';
+    btn.querySelector('.fname').textContent = file.name;
+    btn.addEventListener('click', () => openSheet(file));
+    row.appendChild(btn);
+  } else if (file.type && file.type.startsWith('image')){
+    const btn = document.createElement('button');
+    btn.className = 'open-btn';
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.src = makeUrl(file.blob);
+    const name = document.createElement('span');
+    name.className = 'fname';
+    name.textContent = file.name;
+    btn.appendChild(img); btn.appendChild(name);
+    btn.addEventListener('click', () => openPhoto(makeUrl(file.blob)));
+    row.appendChild(btn);
+    if (allowScan){
+      const scanIcon = document.createElement('button');
+      scanIcon.className = 'icon-btn';
+      scanIcon.textContent = '🔎';
+      scanIcon.title = 'Scan text from this photo';
+      scanIcon.addEventListener('click', () => openScan(file.blob, file.name));
+      row.appendChild(scanIcon);
+    }
+  } else {
+    const link = document.createElement('a');
+    link.className = 'open-link';
+    link.href = makeUrl(file.blob);
+    link.target = '_blank'; link.rel = 'noopener'; link.download = file.name;
+    const emoji = document.createElement('span');
+    emoji.className = 'emoji'; emoji.textContent = fileEmoji(file.type, file.name);
+    const name = document.createElement('span');
+    name.className = 'fname'; name.textContent = file.name;
+    link.appendChild(emoji); link.appendChild(name);
+    row.appendChild(link);
+  }
+
+  if (removable){
+    const rm = document.createElement('button');
+    rm.className = 'icon-btn danger'; rm.textContent = '✕';
+    rm.addEventListener('click', onRemove);
+    row.appendChild(rm);
+  }
+  return row;
+}
+
+/* ---------- photo viewer ---------- */
+const photoViewer = document.getElementById('photoViewer');
+const photoViewerImg = document.getElementById('photoViewerImg');
+document.getElementById('photoViewerClose').addEventListener('click', () => {
+  photoViewer.classList.remove('show');
+  photoViewerImg.src = '';
+});
+function openPhoto(url){
+  photoViewerImg.src = url;
+  photoViewer.classList.add('show');
+}
+
+/* ---------- sheet editor ---------- */
+const sheetOverlay = document.getElementById('sheetOverlay');
+const sheetName = document.getElementById('sheetName');
+const sheetTable = document.getElementById('sheetTable');
+let activeSheet = null;
+
+function openSheet(sheet){
+  activeSheet = sheet;
+  sheetName.textContent = sheet.name;
+  renderSheetTable();
+  sheetOverlay.classList.add('show');
+}
+function renderSheetTable(){
+  sheetTable.innerHTML = '';
+  activeSheet.data.forEach(rowData => {
+    const tr = document.createElement('tr');
+    rowData.forEach((val, ci) => {
+      const td = document.createElement('td');
+      td.contentEditable = 'true';
+      td.textContent = val;
+      tr.appendChild(td);
+    });
+    sheetTable.appendChild(tr);
+  });
+}
+function readSheetTable(){
+  const rows = [];
+  sheetTable.querySelectorAll('tr').forEach(tr => {
+    const row = [];
+    tr.querySelectorAll('td').forEach(td => row.push(td.textContent));
+    rows.push(row);
+  });
+  return rows;
+}
+document.getElementById('addRowBtn').addEventListener('click', () => {
+  const cols = activeSheet.data[0] ? activeSheet.data[0].length : 5;
+  activeSheet.data = readSheetTable();
+  activeSheet.data.push(Array.from({length:cols}, () => ''));
+  renderSheetTable();
+});
+document.getElementById('addColBtn').addEventListener('click', () => {
+  activeSheet.data = readSheetTable();
+  activeSheet.data.forEach(r => r.push(''));
+  renderSheetTable();
+});
+document.getElementById('downloadSheetBtn').addEventListener('click', () => {
+  activeSheet.data = readSheetTable();
+  const csv = activeSheet.data.map(r => r.map(c => '"' + String(c || '').replace(/"/g,'""') + '"').join(',')).join('\n');
+  downloadBlob(new Blob([csv], { type: 'text/csv' }), safeName(activeSheet.name) + '.csv');
+});
+document.getElementById('sheetBackBtn').addEventListener('click', async () => {
+  activeSheet.data = readSheetTable();
+  await persist();
+  sheetOverlay.classList.remove('show');
+  if (view === 'topic') renderTopic();
+});
+
+/* ---------- scan a photo & convert to a document ---------- */
+const scanOverlay = document.getElementById('scanOverlay');
+const scanStatus = document.getElementById('scanStatus');
+const scanTextarea = document.getElementById('scanTextarea');
+let scanSourceName = 'Scanned text';
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function wordBlobFromText(text){
+  const html = '<html><head><meta charset="utf-8"></head><body>'
+    + text.split('\n').map(l => '<p>' + (escapeHtml(l) || '&nbsp;') + '</p>').join('')
+    + '</body></html>';
+  return new Blob([html], { type: 'application/msword' });
+}
+function pdfBlobFromText(text){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const lines = doc.splitTextToSize(text || ' ', 180);
+  doc.text(lines, 10, 14);
+  return doc.output('blob');
+}
+function csvBlobFromText(text){
+  const rows = text.split('\n').map(l => '"' + l.replace(/"/g, '""') + '"').join('\n');
+  return new Blob([rows], { type: 'text/csv' });
+}
+
+async function openScan(blob, sourceName){
+  scanSourceName = (sourceName || 'Scan').replace(/\.[^.]+$/, '');
+  scanTextarea.value = '';
+  scanStatus.textContent = 'Reading the photo… this can take a moment.';
+  scanOverlay.classList.add('show');
+  try{
+    const { data } = await Tesseract.recognize(blob, 'eng');
+    scanTextarea.value = (data.text || '').trim();
+    scanStatus.textContent = 'Check the text below and fix anything it got wrong, then pick a format to save.';
+  } catch(err){
+    scanStatus.textContent = "Couldn't read that photo clearly — try a straighter, well-lit shot.";
+  }
+}
+document.getElementById('scanBackBtn').addEventListener('click', () => scanOverlay.classList.remove('show'));
+
+async function saveScanResult(blob, ext, mimeName){
+  currentTopic.files.push({ id: uid(), name: scanSourceName + ext, type: mimeName, blob });
+  await persist();
+  scanOverlay.classList.remove('show');
+  if (view === 'topic') renderTopic();
+}
+document.getElementById('saveWordBtn').addEventListener('click', () => {
+  saveScanResult(wordBlobFromText(scanTextarea.value), '.doc', 'application/msword');
+});
+document.getElementById('savePdfBtn').addEventListener('click', () => {
+  saveScanResult(pdfBlobFromText(scanTextarea.value), '.pdf', 'application/pdf');
+});
+document.getElementById('saveExcelBtn').addEventListener('click', () => {
+  saveScanResult(csvBlobFromText(scanTextarea.value), '.csv', 'text/csv');
+});
+
+/* ---------- drawing ---------- */
+const drawOverlay = document.getElementById('drawOverlay');
+const drawCanvas = document.getElementById('drawCanvas');
+const drawToolbar = document.getElementById('drawToolbar');
+let drawCtx, drawing = false, penColor = PEN_COLORS[0];
+
+function openDraw(){
+  drawOverlay.classList.add('show');
+  requestAnimationFrame(() => {
+    const rect = drawCanvas.getBoundingClientRect();
+    drawCanvas.width = rect.width;
+    drawCanvas.height = rect.height;
+    drawCtx = drawCanvas.getContext('2d');
+    drawCtx.fillStyle = '#FFFFFF';
+    drawCtx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+    drawCtx.lineCap = 'round';
+    drawCtx.lineJoin = 'round';
+  });
+  drawToolbar.innerHTML = '';
+  PEN_COLORS.forEach((c, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'pen-swatch' + (i === 0 ? ' selected' : '');
+    sw.style.background = c;
+    sw.addEventListener('click', () => {
+      penColor = c;
+      drawToolbar.querySelectorAll('.pen-swatch').forEach(s => s.classList.remove('selected'));
+      sw.classList.add('selected');
+    });
+    drawToolbar.appendChild(sw);
+  });
+  penColor = PEN_COLORS[0];
+}
+function getPos(e){
+  const rect = drawCanvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+drawCanvas.addEventListener('pointerdown', (e) => {
+  drawing = true;
+  const p = getPos(e);
+  drawCtx.beginPath();
+  drawCtx.moveTo(p.x, p.y);
+});
+drawCanvas.addEventListener('pointermove', (e) => {
+  if (!drawing) return;
+  const p = getPos(e);
+  drawCtx.strokeStyle = penColor;
+  drawCtx.lineWidth = 3;
+  drawCtx.lineTo(p.x, p.y);
+  drawCtx.stroke();
+});
+window.addEventListener('pointerup', () => { drawing = false; });
+
+document.getElementById('drawBackBtn').addEventListener('click', () => {
+  drawOverlay.classList.remove('show');
+});
+document.getElementById('drawSaveBtn').addEventListener('click', () => {
+  drawCanvas.toBlob(async (blob) => {
+    if (!blob) return;
+    currentTopic.files.push({ id: uid(), name: 'Drawing ' + new Date().toLocaleString(), type: 'image/png', blob });
+    await persist();
+    drawOverlay.classList.remove('show');
+    if (view === 'topic') renderTopic();
+  }, 'image/png');
+});
+
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+render();
+</script>
+</body>
+</html>
